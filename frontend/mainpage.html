@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Emoji Search </title>
+
+    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        .button {
+            width: 11rem;
+            border: none;
+            border-radius: 1rem;
+            padding: 1rem 2rem;
+
+            font-size: 1.3rem;
+            font-family: monospace;
+        }
+
+        .button:hover {
+            background: #e0e0e0;
+        }
+
+        .description {
+            position: absolute;
+            width: 20rem;
+            margin-left: 1.1rem;
+            margin-top: -0.24em;
+
+            color: #a9a9a9;
+            font-size: 0.8rem;
+            line-height: 0.9rem;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div>
+        <div
+            style="display: flex; flex-direction: column; align-items: center; width: 26rem; height: 48rem; border: 0.3rem solid #f0f0f0; border-radius: 2rem; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); margin-top: 2rem;">
+            <p style="font-size: 2rem; font-weight: 700; margin-top: 3rem;"> Emoji Search </p>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                <button class="button" id="editor"> Text Editor </button>
+                <button class="button" id="demo"> Demo </button>
+            </div>
+
+            <script type="text/javascript">
+                document.getElementById("editor").onclick = function () {
+                    location.href = "http://localhost:3000/editor";
+                };
+            </script>
+
+            <script type="text/javascript">
+                document.getElementById("demo").onclick = function () {
+                    location.href = "http://localhost:3000/demo";
+                };
+            </script>
+
+            <div
+                style="color: grey; width: 20rem; line-height: 1.6rem; margin-left: -2rem; margin-top: 5rem; font-family: monospace;">
+                Implementation of a search engine </br> ( Tsinghua Web IR project )
+                </br>
+                </br>
+                Available functionality: </br>
+                1. Emoji search </br>
+                <span class="description">
+                    search for custom emojis using Word2Vec model or for default Unicode emojis with normal search
+                </span>
+                </br>
+                </br>
+                2. Emoji prediction </br>
+                <span class="description">
+                    predict emoji at the end of the sentence via fine-tuned or base BERT models
+                </span>
+                </br>
+                </br>
+                3. Text editor </br>
+                <span class="description">
+                    default features of a text editor, e.g., font style, font size, save, dark mode
+                </span>
+            </div>
+
+            <div style="margin-left: -13rem; margin-top: 3rem; font-family: monospace;"> ©2025 Ivan Iazykov </div>
+        </div>
+    </div>
+</body>
+
+</html>

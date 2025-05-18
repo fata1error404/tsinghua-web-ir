@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title> Text Editor </title>
+
+    <link rel="stylesheet" href="styles.css">
+
+    <script type="module" src="emoji-predict.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body>
+    <div class="wrapper">
+        <!-- Editor -->
+        <div class="editor-container">
+            <div class="editor-header"> Text Editor 🖋️ </div>
+
+            <div class="editor-toolbar">
+                <button id="emoji-btn"> 😊 </button>
+                <button id="bold-btn"><strong> B </strong></button>
+                <button id="italic-btn"><em> I </em></button>
+                <button id="underline-btn"><u> U </u></button>
+
+                <button id="font-decrease" style="margin-left: 1rem; font-weight: bold;"> – </button>
+                <button id="font-increase" style="font-weight: bold;"> + </button>
+                <span id="font-size-px-text"> 16px </span>
+
+                <label class="smart-toggle" style="margin-top: 0px;">
+                    <input id="prediction-enable-checkbox" type="checkbox"> Emoji Prediction
+                    <button id="prediction-settings-btn" class="prediction-settings-btn" title="Settings">⋮</button>
+
+                    <div id="prediction-settings-popup" class="prediction-settings-popup">
+                        <label>
+                            <input id="prediction-database-checkbox" type="checkbox" style="cursor: pointer;">
+                            Discord Emojis
+                        </label>
+
+                        <br />
+
+                        <label>
+                            <input id="prediction-model-checkbox" type="checkbox"
+                                style="cursor: pointer; margin-top: 0.5rem;">
+                            Fine Tuned
+                        </label>
+                    </div>
+                </label>
+
+                <div style="margin-left: auto;">
+                    <button id="dark-mode-btn"> 🌙 </button>
+
+                    <button id="save-btn"> 💾 Save </button>
+                </div>
+            </div>
+
+            <div class="editor-area">
+                <div id="editor-input" contenteditable="true" data-placeholder="Start typing here..."></div>
+                <div id="emoji-suggestions"></div>
+            </div>
+        </div>
+
+        <!-- Emoji Panel -->
+        <div class="emoji-container" id="emoji-panel">
+            <div class="search-wrapper">
+                <span class="icon">🔍</span>
+                <input id="emoji-search" type="text" placeholder="Search emojis" />
+            </div>
+
+            <label class="smart-toggle">
+                <input id="use-db" type="checkbox" checked />
+                Discord Emojis
+            </label>
+
+            <label class="smart-toggle">
+                <input id="smart-search" type="checkbox" checked style="margin-left: 1.5rem; opacity: 0.5;" />
+                <div style="opacity: 0.5;">Smart Search </div>
+            </label>
+
+            <label class="smart-toggle">
+                <input id="animated-emojis" type="checkbox" checked style="margin-left: 1.5rem; opacity: 0.5;" />
+                <div style="opacity: 0.5;">Animated</div>
+            </label>
+
+            <div id="emoji-list"> </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("dark-mode-btn").addEventListener("click", () => {
+            document.body.classList.toggle("dark-mode");
+
+            // Optional: change button icon dynamically
+            const toggleBtn = document.getElementById("dark-mode-btn");
+            if (document.body.classList.contains("dark-mode")) {
+                toggleBtn.textContent = "☀️";
+            } else {
+                toggleBtn.textContent = "🌙";
+            }
+        });
+    </script>
+
+    <script>
+        const btn = document.getElementById('dark-mode-btn');
+        const root = document.documentElement;
+
+        // On load, read last preference (optional):
+        const saved = localStorage.getItem('theme');
+        if (saved === 'dark') {
+            root.setAttribute('data-theme', 'dark');
+            btn.textContent = '☀️';
+        }
+
+        btn.addEventListener('click', () => {
+            const isDark = root.getAttribute('data-theme') === 'dark';
+            if (isDark) {
+                root.removeAttribute('data-theme');
+                btn.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                root.setAttribute('data-theme', 'dark');
+                btn.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+    </script>
+
+
+    <script>
+        let currentEmojiSize = 20;
+
+        const editor = document.getElementById('editor-input');
+        const [boldBtn, italicBtn, underlineBtn] = [
+            document.getElementById('bold-btn'),
+            document.getElementById('italic-btn'),
+            document.getElementById('underline-btn')
+        ];
+        const emojiBtn = document.getElementById('emoji-btn');
+        const emojiPanel = document.getElementById('emoji-panel');
+        const emojiSearch = document.getElementById('emoji-search');
+        const emojiList = document.getElementById('emoji-list');
+        const smartToggle = document.getElementById('smart-search');
+        const animatedToggle = document.getElementById('animated-emojis');
+        const databaseToggle = document.getElementById('use-db');
+
+        const decreaseBtn = document.getElementById('font-decrease');
+        const increaseBtn = document.getElementById('font-increase');
+        const fontSizeDisplay = document.getElementById('font-size-px-text');
+        const emojiBox = document.getElementById('emoji-suggestions');
+
+
+        // --- EMOJI PREDICTIONS ---
+        // _________________________
+
+        const predictEnableCheckbox = document.getElementById('prediction-enable-checkbox');
+        const predictSettingsBtn = document.getElementById('prediction-settings-btn');
+        const predictSettingsPop = document.getElementById('prediction-settings-popup');
+        const predictDbCheckbox = document.getElementById('prediction-database-checkbox');
+        const predictModelCheckbox = document.getElementById('prediction-model-checkbox');
+
+        predictEnableCheckbox.addEventListener("change", function () {
+            if (this.checked) {
+                predictSettingsBtn.style.display = 'block';
+            } else {
+                predictSettingsBtn.style.display = 'none';
+                emojiBox.innerHTML = "";
+            }
+        });
+
+        // Open popup when the settings button is clicked
+        predictSettingsBtn.addEventListener('click', e => {
+            e.stopPropagation(); // Prevent the event from bubbling up to the document
+            predictSettingsPop.style.display = predictSettingsPop.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // Prevent closing the popup when clicking inside it (allow interactions like the toggle)
+        predictSettingsPop.addEventListener('click', e => {
+            e.stopPropagation(); // Prevent the click event from bubbling up
+        });
+
+        // Close the popup only if the click is outside both the popup and the settings button
+        document.addEventListener('click', (e) => {
+            // If the click is outside the popup and the settings button, close the popup
+            if (!predictSettingsPop.contains(e.target) && !predictSettingsBtn.contains(e.target)) {
+                predictSettingsPop.style.display = 'none';
+            }
+        });
+
+        function getLastTextSegmentBeforeCursor(editor) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return '';
+            const range = selection.getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(editor);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            const textBeforeCursor = preCaretRange.toString();
+
+            // Regex: split by emoji or sentence-ending punctuation or newline
+            // This uses Unicode property escapes for emojis
+            const segments = textBeforeCursor
+                .split(/(?<=[\p{Emoji}\p{Punctuation}\n])/gu)
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            return segments.length ? segments[segments.length - 1] : textBeforeCursor.trim();
+        }
+
+
+        function insertEmojiImageAtCaret(link, mode) {
+            editor.focus();
+            restoreSelection();
+
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return;
+            const range = sel.getRangeAt(0);
+
+            console.log("Inserting emoji:", link);
+            console.log("Mode:", mode);
+
+            if (!mode) {
+                // Image mode (same logic as before)
+                const emojiNode = document.createElement('span');
+                emojiNode.setAttribute('contenteditable', 'false');
+                emojiNode.className = 'emoji-char';
+                emojiNode.style.width = `${currentEmojiSize}px`;
+                emojiNode.style.height = `${currentEmojiSize}px`;
+                emojiNode.style.backgroundImage = `url('${link}')`;
+
+                range.deleteContents();
+                range.insertNode(emojiNode);
+
+                const zwsp = document.createTextNode('\u200B');  // Zero-width space to allow caret movement
+                emojiNode.after(zwsp);
+                range.setStartAfter(zwsp);
+            } else {
+                // Unicode emoji mode
+                console.log("INSERTING " + link)
+                range.deleteContents();
+                range.insertNode(document.createTextNode(link));
+                // move caret after
+                range.setStart(range.endContainer, range.endOffset);
+            }
+
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+
+
+            updateButtonStates();
+            saveSelection();
+        }
+
+        let debounceTimer;
+
+        editor.addEventListener('input', () => {
+            // 1) Only run when prediction is on
+            if (!predictEnableCheckbox.checked) {
+                emojiBox.style.visibility = 'hidden';
+                return;
+            }
+
+            //const text = editor.innerText.trim();
+
+            const text = getLastTextSegmentBeforeCursor(editor);
+
+
+            if (!text) {
+                emojiBox.style.visibility = 'hidden';
+                return;
+            }
+
+            // 2) Get database toggle state & model
+            const databaseParam = predictDbCheckbox.checked ? 'enabled' : 'disabled';
+            const isBaseModel = !predictModelCheckbox.checked;
+            const modelParam = isBaseModel ? 'bert_base' : 'bert_fine_tuned';
+
+            // the actual fetch + render logic
+            const doFetch = async () => {
+                let link, isNormal;
+                try {
+                    const res = await fetch(
+                        `/api/emoji-predict?database=${databaseParam}&model=${modelParam}`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text }),
+                        }
+                    );
+                    if (!res.ok) throw new Error();
+                    const data = await res.json();
+                    if (data.link) {
+                        link = data.link.trim().replace(/^"|"$/g, '');
+                        isNormal = false;
+                    } else {
+                        link = data.name;
+                        isNormal = true;
+                    }
+                } catch {
+                    emojiBox.style.visibility = 'hidden';
+                    return;
+                }
+
+                // render the emoji
+                emojiBox.innerHTML = '';
+                const item = document.createElement('div');
+                item.className = 'emoji-item';
+                if (!isNormal) {
+                    const img = document.createElement('img');
+                    img.src = link;
+                    img.width = currentEmojiSize;
+                    img.height = currentEmojiSize;
+                    item.appendChild(img);
+                } else {
+                    const span = document.createElement('span');
+                    span.textContent = link;
+                    span.style.fontSize = '1.5rem';
+                    item.appendChild(span);
+                }
+                item.addEventListener('click', () => {
+                    insertEmojiImageAtCaret(link, isNormal, currentEmojiSize);
+                    emojiBox.style.visibility = 'hidden';
+                });
+                emojiBox.appendChild(item);
+
+                // position
+                const sel = window.getSelection();
+                if (!sel.rangeCount) return;
+                const range = sel.getRangeAt(0).cloneRange();
+                range.collapse(false);
+                const rects = range.getClientRects();
+                if (rects.length) {
+                    const rect = rects[0];
+                    const cr = editor.getBoundingClientRect();
+                    emojiBox.style.top = `${rect.bottom - cr.top + editor.scrollTop + 4}px`;
+                    emojiBox.style.left = `${rect.left - cr.left + editor.scrollLeft}px`;
+                    emojiBox.style.visibility = 'visible';
+                }
+            };
+
+            if (isBaseModel) {
+                // debounce for bert_base
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(doFetch, 1000);
+            } else {
+                // immediate for bert_fine_tuned
+                doFetch();
+            }
+        });
+
+
+        // Wrap or adjust font-size
+        async function changeFontSize(delta) {
+            // 1. Focus editor and restore selection
+            editor.focus();
+            restoreSelection();
+
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return;
+
+            const range = sel.getRangeAt(0);
+
+            // 2. Handle collapsed selection (no text selected)
+            if (range.collapsed) {
+                const currSize = parseInt(getComputedStyle(editor).fontSize);
+                const newSize = Math.max(currSize + delta, 8);
+                editor.style.fontSize = `${newSize}px`;
+
+                // Adjust all inline emoji sizes to match new base size
+                document.querySelectorAll('#editor-input .emoji-char').forEach(el => {
+                    el.style.width = `${newSize}px`;
+                    el.style.height = `${newSize}px`;
+                });
+
+            } else {
+                // 3. Handle text selection: wrap selection in span with new font size
+                const span = document.createElement('span');
+                span.style.fontSize = `${Math.max(
+                    parseInt(getComputedStyle(range.startContainer.parentElement).fontSize) + delta,
+                    8
+                )}px`;
+                span.style.fontFamily = 'monospace';
+
+                span.appendChild(range.extractContents());
+                range.insertNode(span);
+
+                // Move caret after inserted span
+                range.setStartAfter(span);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                saveSelection();
+            }
+
+            // 4. Scale .emoji-char elements inside the editor individually if they have their own size
+            document.querySelectorAll('#editor-input .emoji-char').forEach(el => {
+                const style = getComputedStyle(el);
+                const size = Math.max(parseFloat(style.width) + delta, 10);
+                el.style.width = `${size}px`;
+                el.style.height = `${size}px`;
+                currentEmojiSize = size;
+            });
+
+            // 5. Update toolbar font size display
+            updateFontSizeDisplay();
+        }
+
+
+        // Update display (no change)
+        function updateFontSizeDisplay() {
+            const sel = window.getSelection();
+            let node = sel.rangeCount && sel.focusNode;
+            if (node && node.nodeType === 3) node = node.parentNode;
+            const size = node
+                ? getComputedStyle(node).fontSize
+                : getComputedStyle(editor).fontSize;
+            fontSizeDisplay.textContent = size;
+        }
+
+        // Wire up buttons
+        decreaseBtn.addEventListener('mousedown', e => e.preventDefault());
+        increaseBtn.addEventListener('mousedown', e => e.preventDefault());
+        decreaseBtn.addEventListener('click', () => changeFontSize(-8));
+        increaseBtn.addEventListener('click', () => changeFontSize(+8));
+
+        // Keep display in sync
+        editor.addEventListener('keyup', updateFontSizeDisplay);
+        editor.addEventListener('mouseup', updateFontSizeDisplay);
+        editor.addEventListener('click', updateFontSizeDisplay);
+
+        // init display
+        updateFontSizeDisplay();
+
+        // ____________
+
+        let savedRange = null;
+
+        // 1) Save selection on all editor interactions
+        function saveSelection() {
+            const sel = window.getSelection();
+            if (sel.rangeCount) {
+                savedRange = sel.getRangeAt(0).cloneRange();
+            }
+        }
+
+        function restoreSelection() {
+            if (savedRange) {
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(savedRange);
+            }
+        }
+
+        // Attach to clicks + typing in the editor
+        editor.addEventListener('mouseup', saveSelection);
+        editor.addEventListener('keyup', saveSelection);
+        editor.addEventListener('click', saveSelection);
+
+        function updateButtonStates() {
+            boldBtn.classList.toggle('active', document.queryCommandState('bold'));
+            italicBtn.classList.toggle('active', document.queryCommandState('italic'));
+            underlineBtn.classList.toggle('active', document.queryCommandState('underline'));
+        }
+
+        [boldBtn, italicBtn, underlineBtn].forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cmd = btn === boldBtn ? 'bold'
+                    : btn === italicBtn ? 'italic'
+                        : 'underline';
+                document.execCommand(cmd);
+                updateButtonStates();
+                editor.focus();
+            });
+        });
+
+        emojiBtn.addEventListener('click', () => {
+            const isOpen = emojiPanel.classList.contains('open');
+
+            emojiPanel.classList.toggle('open');
+            emojiBtn.classList.toggle('active', !isOpen);
+
+            if (!isOpen) {
+                const query = emojiSearch.value.trim();
+                if (query) fetchEmojis(query);
+            } else {
+                emojiSearch.value = '';
+                emojiList.innerHTML = '';
+            }
+        });
+
+        function renderEmojis(arr) {
+            emojiList.innerHTML = '';
+            arr.forEach(e => {
+                const div = document.createElement('div');
+                div.className = 'emoji-item';
+
+                if (e.link) {
+                    // — your existing image case
+                    const img = document.createElement('img');
+                    img.src = e.link;
+                    img.alt = e.name;
+                    img.className = 'emoji-image';
+                    div.appendChild(img);
+                } else {
+                    // — unicode‐emoji case: just show the character
+                    const span = document.createElement('span');
+                    span.textContent = e.name;         // e.name is the char
+                    span.style.fontSize = '2.0rem';    // match .emoji-image size
+                    div.appendChild(span);
+                }
+
+                // label under both cases
+                const label = document.createElement('div');
+                label.className = 'emoji-name';
+                // if it's unicode, e.tags contains description(s)
+                label.textContent = (e.link ? e.name : e.tags[0]).replace(/_/g, ' ');
+                div.appendChild(label);
+
+                div.addEventListener('click', () => {
+                    editor.focus();
+                    restoreSelection();
+
+                    const sel = window.getSelection();
+                    if (!sel.rangeCount) return;
+                    const range = sel.getRangeAt(0);
+
+                    if (e.link) {
+                        // image‐emoji insertion (your existing logic)
+                        const emojiNode = document.createElement('span');
+                        emojiNode.setAttribute('contenteditable', 'false');
+                        emojiNode.className = 'emoji-char';
+                        emojiNode.style.width = `${currentEmojiSize}px`;
+                        emojiNode.style.height = `${currentEmojiSize}px`;
+                        emojiNode.style.backgroundImage = `url('${e.link}')`;
+                        range.deleteContents();
+                        range.insertNode(emojiNode);
+                        // zero‐width spacer   
+                        const zwsp = document.createTextNode('\u200B');
+                        emojiNode.after(zwsp);
+                        range.setStartAfter(zwsp);
+                    } else {
+                        // unicode insertion: just insert the character
+                        range.deleteContents();
+                        range.insertNode(document.createTextNode(e.name));
+                        // move caret after
+                        range.setStart(range.endContainer, range.endOffset);
+                    }
+
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+
+                    updateButtonStates();
+                    saveSelection();
+                });
+
+                emojiList.appendChild(div);
+            });
+        }
+
+        let debounce;
+        emojiSearch.addEventListener('input', e => {
+            clearTimeout(debounce);
+            const q = e.target.value.trim();
+            debounce = setTimeout(() => fetchEmojis(q), 1000);
+        });
+
+        smartToggle.addEventListener('change', () => {
+            const q = emojiSearch.value.trim();
+            if (q) fetchEmojis(q);
+        });
+
+        animatedToggle.addEventListener('change', () => {
+            const q = emojiSearch.value.trim();
+            if (q) fetchEmojis(q);
+        });
+
+        databaseToggle.addEventListener('change', () => {
+            const q = emojiSearch.value.trim();
+            if (q) fetchEmojis(q);
+        });
+
+        async function fetchEmojis(q) {
+            try {
+                if (!q.trim()) {
+                    emojiList.innerHTML = '';
+                    return;
+                }
+
+                const database = databaseToggle.checked ? 'enabled' : 'disabled';
+                const mode = smartToggle.checked ? 'smart' : 'normal';
+                const type = animatedToggle.checked ? 'all' : 'normal';
+                const url = `/api/emoji-search?q=${encodeURIComponent(q)}&mode=${mode}&type=${type}&database=${database}`;
+
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(res.statusText);
+
+                const payload = await res.json();
+                const data = payload.results ?? payload; // support both formats
+                renderEmojis(data);
+
+            } catch (err) {
+                console.error('Emoji search failed', err);
+            }
+        }
+
+        editor.addEventListener('keyup', updateButtonStates);
+        editor.addEventListener('mouseup', updateButtonStates);
+
+        function updateToggleVisibility() {
+            const shouldShow = databaseToggle.checked;
+            smartToggle.parentElement.style.display = shouldShow ? 'flex' : 'none';
+            animatedToggle.parentElement.style.display = shouldShow ? 'flex' : 'none';
+        }
+
+        // Update visibility when toggled
+        databaseToggle.addEventListener('change', updateToggleVisibility);
+
+        // Initial check on page load
+        window.addEventListener('DOMContentLoaded', updateToggleVisibility);
+
+
+        // SAVE button
+        document.getElementById('save-btn').addEventListener('click', () => {
+            const originalColor = editor.style.color;
+            editor.style.color = '#000'; // Force black font color
+
+            const opt = {
+                margin: 10,
+                filename: 'document.pdf',
+                image: { type: 'jpeg', quality: 1.0 },
+                html2canvas: { scale: 5, useCORS: true, backgroundColor: '#fff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf()
+                .set(opt)
+                .from(editor)
+                .save()
+                .finally(() => {
+                    editor.style.color = originalColor; // Restore original color
+                });
+        });
+
+    </script>
+
+</body>
+
+</html>

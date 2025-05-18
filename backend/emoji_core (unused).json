@@ -1,0 +1,270 @@
+[
+    {
+        "char": "🚗",
+        "name": "car"
+    },
+    {
+        "char": "📱",
+        "name": "mobile_phone"
+    },
+    {
+        "char": "🎮",
+        "name": "video_game"
+    },
+    {
+        "char": "🍕",
+        "name": "pizza"
+    },
+    {
+        "char": "🦊",
+        "name": "fox"
+    },
+    {
+        "char": "🎨",
+        "name": "art_palette"
+    },
+    {
+        "char": "🚀",
+        "name": "rocket"
+    },
+    {
+        "char": "🎤",
+        "name": "microphone"
+    },
+    {
+        "char": "📚",
+        "name": "books"
+    },
+    {
+        "char": "⚖️",
+        "name": "balance_scale"
+    },
+    {
+        "char": "🖥️",
+        "name": "desktop_computer"
+    },
+    {
+        "char": "📅",
+        "name": "calendar"
+    },
+    {
+        "char": "🎲",
+        "name": "game_die"
+    },
+    {
+        "char": "🌪️",
+        "name": "tornado"
+    },
+    {
+        "char": "⏰",
+        "name": "alarm_clock"
+    },
+    {
+        "char": "💡",
+        "name": "light_bulb"
+    },
+    {
+        "char": "🎉",
+        "name": "tada"
+    },
+    {
+        "char": "🚲",
+        "name": "bicycle"
+    },
+    {
+        "char": "💻",
+        "name": "laptop"
+    },
+    {
+        "char": "💼",
+        "name": "briefcase"
+    },
+    {
+        "char": "🖋️",
+        "name": "fountain_pen"
+    },
+    {
+        "char": "🎹",
+        "name": "musical_keyboard"
+    },
+    {
+        "char": "🖱️",
+        "name": "computer_mouse"
+    },
+    {
+        "char": "📷",
+        "name": "camera"
+    },
+    {
+        "char": "📝",
+        "name": "memo"
+    },
+    {
+        "char": "🐰",
+        "name": "rabbit"
+    },
+    {
+        "char": "🐱",
+        "name": "cat"
+    },
+    {
+        "char": "🐼",
+        "name": "panda"
+    },
+    {
+        "char": "🦁",
+        "name": "lion"
+    },
+    {
+        "char": "🦄",
+        "name": "unicorn"
+    },
+    {
+        "char": "🍉",
+        "name": "watermelon"
+    },
+    {
+        "char": "🍔",
+        "name": "hamburger"
+    },
+    {
+        "char": "🍟",
+        "name": "fries"
+    },
+    {
+        "char": "🍿",
+        "name": "popcorn"
+    },
+    {
+        "char": "🍩",
+        "name": "doughnut"
+    },
+    {
+        "char": "🍰",
+        "name": "cake"
+    },
+    {
+        "char": "🍺",
+        "name": "beer_mug"
+    },
+    {
+        "char": "🍷",
+        "name": "wine_glass"
+    },
+    {
+        "char": "🎥",
+        "name": "movie_camera"
+    },
+    {
+        "char": "⌚",
+        "name": "watch"
+    },
+    {
+        "char": "📌",
+        "name": "pushpin"
+    },
+    {
+        "char": "🔑",
+        "name": "key"
+    },
+    {
+        "char": "🕯️",
+        "name": "candle"
+    },
+    {
+        "char": "🔒",
+        "name": "lock"
+    },
+    {
+        "char": "⚽",
+        "name": "soccer_ball"
+    },
+    {
+        "char": "🏀",
+        "name": "basketball"
+    },
+    {
+        "char": "🏈",
+        "name": "football"
+    },
+    {
+        "char": "🎾",
+        "name": "tennis"
+    },
+    {
+        "char": "🎵",
+        "name": "musical_note"
+    },
+    {
+        "char": "🎨",
+        "name": "artist_palette"
+    },
+    {
+        "char": "🎬",
+        "name": "clapper_board"
+    },
+    {
+        "char": "🎉",
+        "name": "confetti_ball"
+    },
+    {
+        "char": "✈️",
+        "name": "airplane"
+    },
+    {
+        "char": "🚀",
+        "name": "rocket"
+    },
+    {
+        "char": "⛵",
+        "name": "sailboat"
+    },
+    {
+        "char": "🗽",
+        "name": "statue_of_liberty"
+    },
+    {
+        "char": "🏰",
+        "name": "castle"
+    },
+    {
+        "char": "🏠",
+        "name": "house"
+    },
+    {
+        "char": "🏥",
+        "name": "hospital"
+    },
+    {
+        "char": "❤️",
+        "name": "red_heart"
+    },
+    {
+        "char": "💔",
+        "name": "broken_heart"
+    },
+    {
+        "char": "💰",
+        "name": "money_bag"
+    },
+    {
+        "char": "⭐",
+        "name": "star"
+    },
+    {
+        "char": "🔥",
+        "name": "fire"
+    },
+    {
+        "char": "💧",
+        "name": "droplet"
+    },
+    {
+        "char": "📅",
+        "name": "calendar"
+    },
+    {
+        "char": "⚠️",
+        "name": "warning"
+    }
+]

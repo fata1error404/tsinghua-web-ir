@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  # Backend (Node.js Application)
+  backend:
+    image: node:20-alpine
+    container_name: text-editor
+    depends_on:
+      - mongodb
+      - bert-models
+    command: npm start --prefix /app/backend
+    network_mode: host
+    volumes:
+      - type: bind
+        source: ./backend
+        target: /app/backend
+      - type: bind
+        source: ./frontend
+        target: /app/frontend
+
+  # MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: database
+    environment:
+      MONGO_INITDB_DATABASE: emoji-database
+    network_mode: host
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+
+  # BERT models
+  bert-models:
+    build:
+      context: ./models
+    container_name: bert-models
+    network_mode: host
+    working_dir: /app
+    volumes:
+      - type: bind
+        source: ./models
+        target: /app/models
+      - type: bind
+        source: ${HOME}/.cache/huggingface
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./backend
+        target: /app/backend
