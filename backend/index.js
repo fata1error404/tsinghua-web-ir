@@ -1,29 +1,32 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const word2vec = require('word2vec');
-const emojiList = require('./emoji.json'); // just require JSON normally
 const { MongoClient } = require('mongodb');
-const path = require('path');
+const word2vec = require('word2vec');
+const emojisUnicode = require('./emoji.json');
+const emojisTwitter = require('./emoji_twitter.json');
 
+const path = require('path');
 const app = express();
 
-// Serve static files first
 app.use(express.static(path.join(__dirname, '../frontend')));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-const dbName = "emoji-database";
-const uri = "mongodb://localhost:27017";
+
+const dbName = process.env.MONGO_INITDB_DATABASE;
+const uri = `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/${process.env.MONGO_INITDB_DATABASE}?authSource=admin`;
 const client = new MongoClient(uri);
 
-let emojiColl;
-let model;
+let emojisCollection;
+let tagsCollection;
+let wordEmbeddingsModel;
 
 async function initDb() {
     try {
         await client.connect();
         const db = client.db(dbName);
-        emojiColl = db.collection("Emojis");
+        emojisCollection = db.collection("Emojis");
+        tagsCollection = db.collection("Tags");
         console.log("✅ Connected to MongoDB");
     } catch (err) {
         console.error("Failed to connect to MongoDB:", err);
@@ -31,10 +34,9 @@ async function initDb() {
     }
 }
 
-// Load Word2Vec model with async/await and explicit file descriptor
-async function initModel() {
+async function initWord2Vec() {
     try {
-        model = await new Promise((resolve, reject) => {
+        wordEmbeddingsModel = await new Promise((resolve, reject) => {
             word2vec.loadModel('glove.6B.50d.word2vec.bin', (err, m) => {
                 if (err) return reject(err);
                 resolve(m);
@@ -43,39 +45,32 @@ async function initModel() {
         console.log("✅ Word2Vec model loaded");
     } catch (err) {
         console.error("Failed to load Word2Vec model:", err);
-        throw err;
+        process.exit(1);
     }
 }
 
-// Utility: expand query tag to nearest known tag by DB lookup
+// utility function for emoji database search: expand query tag to nearest known tag by cosine similarity
 async function expandTag(query) {
-    // direct match in DB
-    const exists = await emojiColl.countDocuments({ tags: query });
-    if (exists > 0) {
-        return query;
-    }
-
     try {
-        // Check if the word exists in the model vocabulary
-        if (!model || !model.getVector || !model.getVector(query)) {
-            // Word not in vocabulary — silently ignore and fallback
+        // check if the word exists in the Word2Vec model vocabulary
+        if (!wordEmbeddingsModel || !wordEmbeddingsModel.getVector || !wordEmbeddingsModel.getVector(query))
             return null;
-        }
 
-        const sims = model.mostSimilar(query, 20);
-        for (const { word } of sims) {
-            const found = await emojiColl.countDocuments({ tags: word });
-            if (found > 0) {
-                return word; // Return first matching tag found via similarity
-            }
+        // find the 20 tags most similar to query in the Word2Vec embedding space
+        const similarTags = wordEmbeddingsModel.mostSimilar(query, 20);
+
+        // return the first matching tag in the Tags table
+        for (const { word } of similarTags) {
+            const matchingTag = await tagsCollection.countDocuments({ tag: word });
+            if (matchingTag > 0)
+                return word;
         }
     } catch {
-        // Silently ignore any errors, fallback to normal search
+        // silently ignore any errors, fallback to normal search
     }
 
     return null;
 }
-
 
 
 
@@ -90,72 +85,75 @@ app.get('/editor', (req, res) => {
 });
 
 
+
 // emoji search API
 app.get('/api/emoji-search', async (req, res) => {
+    const searchInput = (req.query.q || '').trim().toLowerCase();
     const useDb = req.query.database === 'enabled';
-    const q = (req.query.q || '').trim().toLowerCase();
-    const isSmart = req.query.mode === 'smart';
-    const wantAll = req.query.type === 'all';
+    const useWord2Vec = req.query.mode === 'smart';
+    const includeGIFs = req.query.type === 'all';
+
+    let filter;
+    let results = [];
 
     try {
-        let results = [];
-
         if (useDb) {
-            // —–– Custom DB search (unchanged)
+            // ─── Discord emoji search ───
             await client.connect();
 
-            const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(escaped, 'i');
+            // build MongoDB search filter
+            const escaped = searchInput.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // quote special characters with '\\'
+            const regex = new RegExp(escaped, 'i'); // create a case-insensitive regular expression from the escaped input
 
-            // Build Mongo filter
-            let filter;
-            if (isSmart) {
-                const expanded = await expandTag(q);
+            if (useWord2Vec) {
+                const expanded = await expandTag(searchInput); // try to expand the search tags using word embeddings for semantic similarity
                 filter = expanded
                     ? { $or: [{ name: regex }, { tags: expanded }] }
                     : { $or: [{ name: regex }, { tags: regex }] };
-            } else {
+            } else
                 filter = { $or: [{ name: regex }, { tags: regex }] };
-            }
 
-            // Fetch up to 100 results
-            let rawResults = await emojiColl
+            // query the first 100 matching by name or tag emojis in the Emojis table
+            let resultsRaw = await emojisCollection
                 .find(filter)
                 .limit(100)
                 .project({ _id: 0, link: 1, name: 1, tags: 1 })
                 .toArray();
 
-            // De-duplicate by emoji name
+            // filter out duplicate emoji results based on the 'name' field
             const seen = new Set();
-            results = rawResults.filter(e => {
-                if (seen.has(e.name)) return false;
+            results = resultsRaw.filter(e => {
+                if (seen.has(e.name))
+                    return false;
+
                 seen.add(e.name);
                 return true;
             });
 
-            // Optionally keep only image links
-            if (!wantAll) {
-                results = results.filter(e =>
-                    e.link.endsWith('.png') || e.link.endsWith('.jpg')
-                );
-            }
+            if (!includeGIFs)
+                results = results.filter(e => e.link.endsWith('.png') || e.link.endsWith('.jpg'));
 
             await client.close();
-
         } else {
-            // —–– Unicode JSON search: exact-name matches first
-            const filtered = emojiList.filter(e => {
-                if (!q) return true;
+            // ─── Unicode emoji search ───
+
+            // query emojis by exact or partial match on name, group, or subgroup
+            let resultsRaw = emojisUnicode.filter(e => {
+                if (!searchInput)
+                    return true;
+
                 const name = e.name.toLowerCase();
                 const group = e.group.toLowerCase();
                 const sub = e.subgroup.toLowerCase();
-                return name.includes(q) || group.includes(q) || sub.includes(q);
+                return name.includes(searchInput) || group.includes(searchInput) || sub.includes(searchInput);
             });
 
+            // separate exact name matches from partial matches
             const exact = [];
             const partial = [];
-            filtered.forEach(e => {
-                if (e.name.toLowerCase() === q) {
+
+            resultsRaw.forEach(e => {
+                if (e.name.toLowerCase() === searchInput) {
                     exact.push(e);
                 } else {
                     partial.push(e);
@@ -173,111 +171,65 @@ app.get('/api/emoji-search', async (req, res) => {
 
         res.json(results);
     } catch (err) {
-        console.error('Error querying emoji-search:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Error searching emoji:', err);
+        res.status(500).json({ error: 'Error searching emoji' });
     }
 });
 
 
 
-// async function emojiPredict(text) {
-//     const res = await fetch('http://localhost:8000/infer/bert_base', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify({ text })
-//     });
-//     if (!res.ok) throw new Error(await res.text());
-//     return res.json(); // returns { emoji, scores }
-// }
+// emoji prediction API
+app.post('/api/emoji-predict', async (req, res) => {
+    const textInput = req.body.text || '';
+    const useDb = req.query.database === 'enabled';
 
-const emojiToTag = {
-    '❤': 'heart',
-    '😃': 'smile',
-    '😂': 'joy',
-    '😍': 'heart_eyes',
-    '😭': 'sob',
-    '😊': 'blush',
-    '💕': 'two_hearts',
-    '🔥': 'fire',
-    '😁': 'grin',
-    '😒': 'unamused',
-    '👍': 'thumbsup',
-    '🙌': 'raised_hands',
-    '😘': 'kissing_heart',
-    '😩': 'weary',
-    '😔': 'pensive',
-    '☀': 'sun',
-    '🎉': 'tada',
-    '💙': 'blue_heart',
-    '✨': 'sparkles',
-    '💜': 'purple_heart'
-};
+    // send input text to the LLM server for inference (predict the emoji by the last sentence in the text area)
+    const askModel = await fetch(`http://localhost:8000/infer/${req.query.model}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textInput })
+    });
 
-app.post(
-    '/api/emoji-predict',
-    async (req, res) => {
-        const useDb = req.query.database === 'enabled';
-        const text = req.body.text || '';
+    if (!askModel.ok)
+        throw new Error(await askModel.text());
 
-        const askModel = await fetch(`http://localhost:8000/infer/${req.query.model}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-        });
+    const { emoji, name } = await askModel.json();
 
-        if (!askModel.ok) throw new Error(await askModel.text());
+    if (!useDb)
+        return res.json({ link: null, name: emoji });
 
-        const { emoji, name } = await askModel.json();
+    try {
+        let predictedTag;
+        if (req.query.model === "bert_fine_tuned")
+            predictedTag = emojisTwitter.find(e => e.emoji === emoji)?.tag || null;
+        else
+            predictedTag = name;
 
-        if (!useDb) {
-            return res.json({ link: null, name: emoji });
-        }
+        if (!predictedTag)
+            return res.status(500).json({ error: 'Unknown emoji mapping' });
 
-        try {
-            // 2) Map to tag
-            let tag;
-            if (req.query.model === "bert_fine_tuned") {
-                tag = emojiToTag[emoji];
-            } else {
-                tag = name;
-            }
+        // search for the first matching emoji by the predicted tag
+        const searchUrl = `/api/emoji-search?q=${encodeURIComponent(predictedTag)}&mode=smart&type=all&database=enabled`;
+        const searchEmoji = await fetch(`http://localhost:3000${searchUrl}`);
 
-            if (!tag) {
-                return res.status(500).json({ error: 'Unknown emoji mapping' });
-            }
+        if (!searchEmoji.ok)
+            throw new Error(`Search failed: ${await searchEmoji.text()}`);
 
-            // 3) Call search API internally
-            const searchUrl = `/api/emoji-search?q=${encodeURIComponent(tag)}&mode=smart&type=all&database=enabled`;
-            const searchRes = await fetch(`http://localhost:3000${searchUrl}`);
-            if (!searchRes.ok) {
-                throw new Error(`Search failed: ${await searchRes.text()}`);
-            }
-            const searchResults = await searchRes.json(); // array of objects
-
-            if (!Array.isArray(searchResults) || searchResults.length === 0) {
-                return res.status(404).json({ error: 'No emojis found' });
-            }
-
-            // 4) Pick one at random
-            const chosen = searchResults[0];
-            // const randomIndex = Math.floor(Math.random() * searchResults.length);
-            // const chosen = searchResults[randomIndex];
-
-            // 5) Return only the link string
-            return res.json({ link: chosen.link });
-
-        } catch (err) {
-            console.error('Emoji-predict error:', err);
-            return res.status(500).json({ error: 'Prediction failed' });
-        }
+        const result = (await searchEmoji.json())[0];
+        return res.json({ link: result.link });
+    } catch (err) {
+        console.error('Error predicting emoji:', err);
+        return res.status(500).json({ error: 'Error predicting emoji' });
     }
-);
+});
+
+
+
 
 // ____________
 // START SERVER
-
 app.listen(3000, async () => {
     console.log('Server running on port 3000');
     await initDb();
-    await initModel();
+    await initWord2Vec();
 });

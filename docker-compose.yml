@@ -5,6 +5,10 @@ services:
   backend:
     image: node:20-alpine
     container_name: text-editor
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
     depends_on:
       - mongodb
       - bert-models
@@ -23,7 +27,9 @@ services:
     image: mongo:latest
     container_name: database
     environment:
-      MONGO_INITDB_DATABASE: emoji-database
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
     network_mode: host
     volumes:
       - type: bind

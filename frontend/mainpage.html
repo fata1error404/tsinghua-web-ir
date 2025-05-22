@@ -11,7 +11,8 @@
 
     <style>
         .button {
-            width: 11rem;
+            width: 100%;
+            height: 4.5rem;
             border: none;
             border-radius: 1rem;
             padding: 1rem 2rem;
@@ -42,22 +43,15 @@
     <div>
         <div
             style="display: flex; flex-direction: column; align-items: center; width: 26rem; height: 48rem; border: 0.3rem solid #f0f0f0; border-radius: 2rem; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); margin-top: 2rem;">
-            <p style="font-size: 2rem; font-weight: 700; margin-top: 3rem;"> Emoji Search </p>
+            <p style="font-size: 2rem; font-weight: 700; margin-top: 3rem;"> Search2Emoji </p>
 
             <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                <button class="button" id="editor"> Text Editor </button>
-                <button class="button" id="demo"> Demo </button>
+                <button class="button" id="editor"> Open Text Editor </button>
             </div>
 
             <script type="text/javascript">
                 document.getElementById("editor").onclick = function () {
-                    location.href = "http://localhost:3000/editor";
-                };
-            </script>
-
-            <script type="text/javascript">
-                document.getElementById("demo").onclick = function () {
-                    location.href = "http://localhost:3000/demo";
+                    location.href = "http://183.173.47.51:3000/editor";
                 };
             </script>
 

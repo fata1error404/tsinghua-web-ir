@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from pymongo import MongoClient, errors
 
 # — Config —
-MONGO_URI = "mongodb://localhost:27017"
+MONGO_URI = "mongodb://admin:webir2025@localhost:27017/emoji-database?authSource=admin"
 DB_NAME = "emoji-database"
 COLL_NAME = "Emojis"
 BASE_URL = "https://emoji.gg"

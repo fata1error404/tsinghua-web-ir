@@ -1,165 +1,143 @@
 import json
 import logging
 import numpy as np
-import torch
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pydantic import BaseModel
-from sklearn.metrics.pairwise import (
-    cosine_similarity,
-)  # only used for bert_fine_tuned if you want
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
-    DistilBertTokenizer,
-    DistilBertModel,
     pipeline,
 )
-from contextlib import asynccontextmanager
-from typing import List
+from sentence_transformers import SentenceTransformer
 
-# ─── logging ────────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger()
 
-# ─── globals ────────────────────────────────────────────────────────────────
-bert_fine_tuned: pipeline = None
+# global variables
 emoji_data: list = []
-embed_tokenizer: DistilBertTokenizer = None
-embed_model: DistilBertModel = None
 emoji_names: list = []
+stopwords: list = []
+base_model: SentenceTransformer = None
+fine_tuned_model: pipeline = None
 emb_matrix: np.ndarray = None
 
 
 def get_sentence_embedding(sentence: str) -> np.ndarray:
-    inputs = embed_tokenizer(
-        sentence, return_tensors="pt", truncation=True, padding=True
-    )
-    if torch.cuda.is_available():
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
-    with torch.no_grad():
-        out = embed_model(**inputs).last_hidden_state.mean(dim=1)
-    emb = out.cpu().numpy().squeeze()
-    return emb
+    result = base_model.encode(sentence)
+    return result
 
 
+# ─── LLM server startup ───
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bert_fine_tuned, emoji_data
-    global embed_tokenizer, embed_model, emoji_names, emb_matrix
+    global emoji_data, emoji_names, stopwords, base_model, fine_tuned_model, emb_matrix
 
-    # 1) Load emoji data
+    # load Unicode emoji JSON data and stopwords
     with open("backend/emoji.json", "r", encoding="utf-8") as f:
         emoji_data = json.load(f)
+
+    with open("models/stopwords.txt", encoding="utf-8") as f:
+        stopwords = [line.strip().lower() for line in f if line.strip()]
+
     logger.info(f"✅ Loaded emoji.json ({len(emoji_data)} entries)")
 
-    # 2) Load fine-tuned emoji classifier
-    rob_tokenizer = AutoTokenizer.from_pretrained(
-        "cardiffnlp/twitter-roberta-base-emoji"
-    )
-    rob_model = AutoModelForSequenceClassification.from_pretrained(
-        "cardiffnlp/twitter-roberta-base-emoji"
-    )
-    bert_fine_tuned = pipeline(
+    # load fine-tuned emoji classifier
+    fine_tuned_model = pipeline(
         "text-classification",
-        model=rob_model,
-        tokenizer=rob_tokenizer,
-        device=0 if torch.cuda.is_available() else -1,
+        model=AutoModelForSequenceClassification.from_pretrained(
+            "cardiffnlp/twitter-roberta-base-emoji", local_files_only=True
+        ),
+        tokenizer=AutoTokenizer.from_pretrained(
+            "cardiffnlp/twitter-roberta-base-emoji", local_files_only=True
+        ),
     )
-    logger.info("✅ Loaded twitter-roberta-base-emoji classifier")
+    logger.info("✅ RoBERTa fine tuned model loaded")
 
-    # 3) Load & speed-optimize DistilBERT embedder
-    embed_tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
-    embed_model = DistilBertModel.from_pretrained("distilbert-base-uncased").eval()
-    if torch.cuda.is_available():
-        embed_model = embed_model.half().to("cuda")
-        logger.info("✅ Embed model on CUDA (FP16)")
-    else:
-        # dynamic quantization on CPU
-        embed_model = torch.quantization.quantize_dynamic(
-            embed_model, {torch.nn.Linear}, dtype=torch.qint8
-        )
-        logger.info("✅ Embed model quantized on CPU")
+    # load base sentence embedding model
+    base_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    logger.info("✅ MiniLM-L6-v2 sentence transformer model loaded")
 
-    # 4) Precompute & normalize all emoji name embeddings
+    # precompute and normalize all emoji name embeddings (embeddings matrix represents all emoji names as dense vectors in the same semantic space, enabling similarity comparisons with future input sentences; emoji name is initially a sentence, like 'smiling face with open hands')
     emoji_names = [e["name"] for e in emoji_data]
-    embs = []
+    emoji_name_embeddings = []
+
     for name in emoji_names:
         emb = get_sentence_embedding(name)
-        embs.append(emb)
-    emb_matrix = np.stack(embs)
+        emoji_name_embeddings.append(emb)
+
+    emb_matrix = np.stack(emoji_name_embeddings)
     emb_matrix /= np.linalg.norm(emb_matrix, axis=1, keepdims=True)
-    logger.info("✅ Precomputed & normalized emoji embeddings matrix")
+    logger.info("✅ Precomputed and normalized emoji name embeddings matrix")
 
     yield
-    logger.info("🛑 Shutting down")
 
 
-# ─── FastAPI setup ────────────────────────────────────────────────────────
+# ─── FastAPI setup ───
+# create a FastAPI app instance with optional startup/shutdown logic
 app = FastAPI(lifespan=lifespan)
 
 
+# define the expected JSON body structure for incoming POST requests
 class TextRequest(BaseModel):
     text: str
 
 
 @app.post("/infer/bert_fine_tuned")
 async def infer_emoji(req: TextRequest):
-    results = bert_fine_tuned(req.text)
-    top = max(results, key=lambda x: x["score"])
-    return {"emoji": top["label"], "scores": results}
+    results = fine_tuned_model(req.text)
 
+    # select and return the emoji prediction with the highest confidence score
+    top_emoji = max(results, key=lambda x: x["score"])
 
-STOPWORDS = {
-    "face",
-    "with",
-    "and",
-    "but",
-    "the",
-    "of",
-    "a",
-    "an",
-    "to",
-    "for",
-    "in",
-    "on",
-    "from",
-}
+    print("")
+    print("Input: " + req.text + " | Output emoji: " + top_emoji["label"])
+    return {"emoji": top_emoji["label"]}
 
 
 @app.post("/infer/bert_base")
 async def infer_text(req: TextRequest):
-    # 1) Compute & normalize input embedding
     sent_emb = get_sentence_embedding(req.text)
     sent_emb /= np.linalg.norm(sent_emb)
 
-    # 2) Vectorized cosine similarity to find best emoji name
-    sims = emb_matrix @ sent_emb
-    idx = int(np.argmax(sims))
-    best_name = emoji_names[idx]
-    best_char = next(e["char"] for e in emoji_data if e["name"] == best_name)
+    # compute vectorized cosine similarity (matrix multiplication) between input sentence embedding and all emoji name embeddings
+    similar_names = emb_matrix @ sent_emb
+    best_idx = int(np.argmax(similar_names))  # get index of the most similar emoji name
+    emoji_name = emoji_names[best_idx]
+    emoji_char = next(e["char"] for e in emoji_data if e["name"] == emoji_name)
 
-    # 3) Split the full name into candidate words (filter stopwords & punctuation)
-    candidates: List[str] = [
+    # split the full emoji name into candidate words (filter out stopwords and punctuation)
+    candidates = [
         w.strip(" ,-’'\"").lower()
-        for w in best_name.split()
-        if w.lower() not in STOPWORDS
+        for w in emoji_name.split()
+        if w.lower() not in stopwords
     ]
-    if not candidates:
-        short_name = best_name.replace(" ", "_")
-    else:
-        # 4) Score each candidate word to pick the “most relevant” one
-        best_score = -1.0
-        short_name = candidates[0]
-        for word in candidates:
-            # embed the word
-            word_emb = get_sentence_embedding(word)
-            word_emb /= np.linalg.norm(word_emb)
-            score = float(np.dot(sent_emb, word_emb))  # cosine on normalized vectors
-            if score > best_score:
-                best_score = score
-                short_name = word
 
-    print("Input: " + req.text + " | Output emoji: " + best_char)
+    # compute cosine similarity between input sentence embedding and all word embeddings in the emoji name to pick 1 word that represents the input sentence the best
+    best_score = -1.0
+    emoji_tag = None
 
-    # 5) Return both emoji and the single-word tag
-    return {"emoji": best_char, "name": short_name}
+    for word in candidates:
+        word_emb = get_sentence_embedding(word)
+        word_emb /= np.linalg.norm(word_emb)
+
+        score = float(np.dot(sent_emb, word_emb))
+
+        if score > best_score:
+            best_score = score
+            emoji_tag = word
+
+    print("")
+    print(
+        "Input: "
+        + req.text
+        + " | Output emoji: "
+        + emoji_char
+        + " | full name: "
+        + emoji_name
+        + " | short name: "
+        + emoji_tag
+    )
+
+    return {"emoji": emoji_char, "name": emoji_tag}

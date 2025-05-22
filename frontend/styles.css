@@ -1,4 +1,6 @@
-/* THEME */
+/* THEME
+   _____ */
+
 :root {
     /* light mode */
     --body-bg: #fafafa;
@@ -10,16 +12,11 @@
     --editor-container-border: #f0f0f0;
     --editor-container-shadow: rgba(0, 0, 0, 0.05);
   
-    --editor-header-border: #e0e0e0;
-  
     --toolbar-bg: #fafafa;
-    --toolbar-border: #e0e0e0;
-    --toolbar-color: #444;
+    --toolbar-separator: #e0e0e0;
     --toolbar-hover-bg: #e0e0e0;
     --toolbar-active-color: #FFD700;
-  
-    --placeholder-color: #ccc;
-  
+
     --popup-bg: white;
     --popup-border: #ccc;
     --popup-shadow: rgba(0, 0, 0, 0.1);
@@ -29,52 +26,41 @@
     --emoji-container-open-border: #f0f0f0;
     --emoji-container-shadow: rgba(0, 0, 0, 0.05);
   
-    --icon-color: #888;
-  
-    --editor-input-color: #000; /* new variable */
+    --text-color: #444;
+    --input-color: #000;
+    --placeholder-color: #ccc;
   }
   
   [data-theme="dark"] {
-    /* darker overall background */
+    /* darker mode */
     --body-bg: #080808; 
 
     --container-border-width: 0.3rem;
     --container-border-radius: 2rem;
 
-    /* editor container – now pure black for OLED */
-    --editor-container-bg: #000000;
-    --editor-container-border: #171717; /* softer transition */
+    --editor-container-bg: #000;
+    --editor-container-border: #171717;
     --editor-container-shadow: rgba(58, 58, 58, 0.6);
-  
-    /* header separator */
-    --editor-header-border: #1f1f1f;  /* Slightly lighter than container bg, subtle but visible */
-
-    /* toolbar */
-    --toolbar-bg: #0a0a0a;             /* Darker than current, closer to container bg but distinct */
-    --toolbar-border: #1f1f1f;         /* Matches header border for harmony */
-    --toolbar-color: #d4d4d4;          /* Light text for good contrast */
-    --toolbar-hover-bg: #282828;       /* Slightly lighter for hover effect */
-    --toolbar-active-color: #FFD700; /* Keep your accent color */
     
-    /* placeholders */
-    --placeholder-color: #6a6a6a;
-  
-    /* popups & suggestions */
+    --toolbar-bg: #0a0a0a;
+    --toolbar-separator: #1f1f1f;
+    --toolbar-hover-bg: #282828;
+    --toolbar-active-color: #FFD700;
+
     --popup-bg: #252526;
     --popup-border: #262626;
     --popup-shadow: rgba(0, 0, 0, 0.8);
   
-    /* emoji panel */
     --emoji-container-bg: #171717;
     --emoji-container-border: var(--body-bg);
     --emoji-container-open-border: #171717;
     --emoji-container-shadow: rgba(58, 58, 58, 0.6);
   
-    /* icons & input */
-    --icon-color: #bbbbbb;
-    --editor-input-color: #e5e5e5;
+    --text-color: #d4d4d4;
+    --input-color: #e5e5e5;
+    --placeholder-color: #6a6a6a;
   }
-  
+
   
 body {
     background: var(--body-bg);
@@ -85,6 +71,30 @@ body {
     margin: 0;
     font-family: sans-serif;
 }
+
+.main {
+    display: flex;
+    gap: 1rem;
+    width: 90%;
+    height: 84%;
+    max-width: 60rem;
+}
+
+.checkbox {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+    color: var(--text-color);
+    font-size: 0.9rem;
+}
+
+.checkbox input[type="checkbox"] {
+    accent-color: var(--body-bg);
+    cursor: pointer;
+}
+
 
 /* EDITOR CONTAINER
    ________________ */
@@ -106,8 +116,8 @@ body {
     font-size: 1.8rem;
     font-weight: bold;
     text-align: center;
-    border-bottom: 1px solid var(--editor-header-border);
-    color: var(--toolbar-color);
+    border-bottom: 1px solid var(--toolbar-separator);
+    color: var(--text-color);
 }
 
 /* toolbar */
@@ -117,8 +127,8 @@ body {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    border-bottom: 1px solid var(--toolbar-border);
-    color: var(--toolbar-color);
+    border-bottom: 1px solid var(--toolbar-separator);
+    color: var(--text-color);
 }
 
 .editor-toolbar button {
@@ -126,11 +136,11 @@ body {
     border-radius: 0.3rem;
     padding: 0.3rem 0.6rem;
     font-size: 16px;
-    cursor: pointer;
-    color: var(--toolbar-color);
+    color: var(--text-color);
     
     background: none;
     transition: background 0.2s, color 0.2s;
+    cursor: pointer;
 }
 
 .editor-toolbar button:hover {
@@ -170,7 +180,7 @@ body {
 
 #save-btn {
     padding-right: 1rem;
-    color: var(--toolbar-color);
+    color: var(--text-color);
 }
 
 /* text area */
@@ -186,7 +196,7 @@ body {
     height: 100%;
     border: none;
     outline: none;
-    color: var(--editor-input-color);
+    color: var(--input-color);
     font-size: 1rem;
     font-family: monospace;
     line-height: 1.5;
@@ -197,7 +207,15 @@ body {
 #editor-input:empty:before {
     content: attr(data-placeholder);
     color: var(--placeholder-color);
-    pointer-events: none;
+}
+
+.emoji-char {
+    display: inline-block;
+    background-size: contain;
+    background-repeat: no-repeat;
+    vertical-align: middle;
+    margin-left: 2px;
+    cursor: text;
 }
 
 #emoji-suggestions {
@@ -244,105 +262,45 @@ body {
     box-shadow: none;
     box-sizing: border-box;
     padding-top: 1rem;
+    overflow: hidden;
     transition-property: width, padding, border-width;
     transition-duration: 0.3s;
     transition-timing-function: ease;
-    overflow: hidden;
-    overflow: hidden;
 }
 
 .emoji-container.open {
     width: 15rem;
-    padding: 1rem;
     border: var(--container-border-width) solid var(--emoji-container-open-border);
     box-shadow: 0 4px 10px var(--emoji-container-shadow);
+    padding: 1rem;
 }
 
-.emoji-char {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    vertical-align: middle;
-    cursor: text;
-    margin-left: 2px;
-    border: none;
-    outline: none;
-    box-shadow: none;
-}
-
-.inline-emoji {
-    width: 1.5rem;
-    height: 1.5rem;
-    vertical-align: -5px;
-}
-
-.wrapper {
-    display: flex;
-    gap: 1rem;
-    /* gap between editor and emoji panel */
-    height: 84%;
-    width: 90%;
-    max-width: 60rem;
-}
-
-.search-wrapper {
+.search-area {
     position: relative;
     margin-bottom: 0.5rem;
 }
 
-.smart-toggle {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.9rem;
-    color: var(--toolbar-color);
-    margin-top: 4px;
-}
-
-.smart-toggle input[type="checkbox"] {
-    accent-color: var(--body-bg);
-    cursor: pointer;
-}
-
-#emoji-search {
-    background: var(--toolbar-bg);
-    width: 100%;
-    padding: 0.5rem 0.5rem 0.5rem 2.3rem;
-    font-size: 1rem;
-    border: 1px solid var(--popup-border);
-    border-radius: 0.5rem;
-    outline: none;
-    box-sizing: border-box;
-    color: var(--editor-input-color);
-    font-family: monospace;
-}
-
-.search-wrapper .icon {
+.search-icon {
     position: absolute;
     left: 0.7rem;
     top: 50%;
     transform: translateY(-50%);
+}
+
+#emoji-search-input {
+    background: var(--toolbar-bg);
+    width: 100%;
+    border: 1px solid var(--popup-border);
+    border-radius: 0.5rem;
+    outline: none;
+    box-sizing: border-box;
+    padding: 0.5rem 0.5rem 0.5rem 2.3rem;
+    color: var(--input-color);
     font-size: 1rem;
-    color: var(--icon-color);
-    pointer-events: none;
+    font-family: monospace;
 }
 
-.emoji-item {
-    font-size: 1.4rem;
-    cursor: pointer;
-    margin: 0.2rem;
-    display: inline-block;
-}
-
-.emoji-item:hover {
-    background: var(--body-bg);
-    border-radius: 0.4rem;
-}
-
-#emoji-search::placeholder {
+#emoji-search-input::placeholder {
     color: var(--placeholder-color);
     font-family: monospace;
 }
@@ -350,46 +308,38 @@ body {
 #emoji-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
+    justify-content: center;
+    gap: 30px;
     max-height: 100%;
-    overflow-y: auto;
-    padding-right: 5px;
-    scrollbar-width: none;
-    /* Firefox */
-    -ms-overflow-style: none;
-    /* IE/Edge */
     margin-top: 0.5rem;
+    overflow-y: auto;
+    scrollbar-width: none;
 }
 
-#emoji-list::-webkit-scrollbar {
-    display: none;
-    /* Chrome, Safari, Edge */
-}
-
-
-.emoji-item {
-    width: 64px;
+.emoji-list-item {
     display: flex;
     align-items: center;
     flex-direction: column;
+    width: 64px;
     padding: 5px;
-    cursor: pointer;
     transition: transform 0.5s;
+    cursor: pointer;
 }
 
-.emoji-item:hover {
+.emoji-list-item:hover {
+    background: var(--body-bg);
+    border-radius: 0.4rem;
     transform: scale(1.1);
 }
 
-.emoji-image {
+.emoji-list-image {
     width: 48px;
     height: 48px;
-    object-fit: contain;
 }
 
-.emoji-name {
+.emoji-list-name {
+    margin-top: 4px;
+    color: var(--text-color);
     font-size: 12px;
     text-align: center;
-    margin-top: 4px;
-    color: var(--toolbar-color);
 }

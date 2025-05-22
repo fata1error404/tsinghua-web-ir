@@ -4,11 +4,11 @@
 
 This project implements a text editor with emoji search and prediction, natively supporting an unlimited number of custom and animated emojis, rendered as normal inline text characters. It integrates key information retrieval techniques, including crawling, results ranking, and the use of Large Language Models.
 
-The system is deployed using __Docker__ for containerization, with __MongoDB__ as the database (2 relational tables – `Emojis` and `Tags`), __Python__ as the backend for running 2 pre-trained BERT models, and __Node.js__ based web application as a single entry point for user (and also running Word2Vec model). Emojis search and prediction are both based on cosine similarity ranking; the only difference lies in the model used to convert the input query vector into an embedding vector.
+The system is deployed using __Docker__ for containerization, with __MongoDB__ as the database (2 tables – `Emojis` and `Tags`), __Python__ as the backend for running 2 pre-trained BERT models, and __Node.js__ based web application as a single entry point for user and central hub (plus also running Word2Vec model). Emojis search and prediction are both based on cosine similarity ranking; the only difference lies in the model used to convert the input query vector into an embedding vector.
 
 ### Architecture diagram
 
-<img src="diagram.jpg" width="80%" height="45%">
+<img src="aux_docs/diagram.jpg" width="80%" height="45%">
 
 <br />
 
@@ -31,7 +31,7 @@ Folders structure:
 
 ### Result
 
-<img src="result.png" width="80%" height="45%">
+<img src="aux_docs/result.png" width="80%" height="45%">
 
 <br />
 

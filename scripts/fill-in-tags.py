@@ -6,7 +6,7 @@ into the Tags table (one entry per tag).
 from pymongo import MongoClient, errors
 
 # — config —
-MONGO_URI = "mongodb://localhost:27017"
+MONGO_URI = "mongodb://admin:webir2025@localhost:27017/emoji-database?authSource=admin"
 DB_NAME = "emoji-database"
 EMOJI_COLL = "Emojis"
 TAGS_COLL = "Tags"
