@@ -35,12 +35,19 @@ services:
       - type: bind
         source: .
         target: /app
+      - type: bind
+        source: ./mongodb
+        target: /data/db
 
   # BERT models
   bert-models:
     build:
       context: ./models
     container_name: bert-models
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
     network_mode: host
     working_dir: /app
     volumes:

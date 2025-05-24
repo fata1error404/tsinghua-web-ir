@@ -3,3 +3,4 @@ uvicorn
 transformers==4.34.0
 scikit-learn
 sentence-transformers
+pymongo

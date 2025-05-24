@@ -1,8 +1,9 @@
+import os
 import json
 import logging
 import numpy as np
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from transformers import (
     AutoTokenizer,
@@ -10,18 +11,21 @@ from transformers import (
     pipeline,
 )
 from sentence_transformers import SentenceTransformer
+from pymongo import MongoClient
 
 # logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger()
 
 # global variables
-emoji_data: list = []
-emoji_names: list = []
+unicode_emoji_data: list = []
+unicode_emoji_names: list = []
+unicode_emb_matrix: np.ndarray = None
+discord_emoji_data: list = []
+discord_emb_matrix: np.ndarray = None
 stopwords: list = []
 base_model: SentenceTransformer = None
 fine_tuned_model: pipeline = None
-emb_matrix: np.ndarray = None
 
 
 def get_sentence_embedding(sentence: str) -> np.ndarray:
@@ -32,16 +36,24 @@ def get_sentence_embedding(sentence: str) -> np.ndarray:
 # ─── LLM server startup ───
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global emoji_data, emoji_names, stopwords, base_model, fine_tuned_model, emb_matrix
+    global \
+        unicode_emoji_data, \
+        unicode_emoji_names, \
+        unicode_emb_matrix, \
+        discord_emoji_data, \
+        discord_emb_matrix, \
+        stopwords, \
+        base_model, \
+        fine_tuned_model
 
     # load Unicode emoji JSON data and stopwords
     with open("backend/emoji.json", "r", encoding="utf-8") as f:
-        emoji_data = json.load(f)
+        unicode_emoji_data = json.load(f)
 
     with open("models/stopwords.txt", encoding="utf-8") as f:
         stopwords = [line.strip().lower() for line in f if line.strip()]
 
-    logger.info(f"✅ Loaded emoji.json ({len(emoji_data)} entries)")
+    logger.info(f"✅ Loaded emoji.json ({len(unicode_emoji_data)} entries)")
 
     # load fine-tuned emoji classifier
     fine_tuned_model = pipeline(
@@ -60,16 +72,44 @@ async def lifespan(app: FastAPI):
     logger.info("✅ MiniLM-L6-v2 sentence transformer model loaded")
 
     # precompute and normalize all emoji name embeddings (embeddings matrix represents all emoji names as dense vectors in the same semantic space, enabling similarity comparisons with future input sentences; emoji name is initially a sentence, like 'smiling face with open hands')
-    emoji_names = [e["name"] for e in emoji_data]
-    emoji_name_embeddings = []
+    unicode_emoji_names = [e["name"] for e in unicode_emoji_data]
+    unicode_emoji_name_embeddings = []
 
-    for name in emoji_names:
+    for name in unicode_emoji_names:
         emb = get_sentence_embedding(name)
-        emoji_name_embeddings.append(emb)
+        unicode_emoji_name_embeddings.append(emb)
 
-    emb_matrix = np.stack(emoji_name_embeddings)
-    emb_matrix /= np.linalg.norm(emb_matrix, axis=1, keepdims=True)
-    logger.info("✅ Precomputed and normalized emoji name embeddings matrix")
+    unicode_emb_matrix = np.stack(unicode_emoji_name_embeddings)
+    unicode_emb_matrix /= np.linalg.norm(unicode_emb_matrix, axis=1, keepdims=True)
+    logger.info("✅ Precomputed and normalized Unicode emoji name embeddings matrix")
+
+    # [UPDATED] load Discord emoji data
+    client = MongoClient(
+        f"mongodb://{os.getenv('MONGO_INITDB_ROOT_USERNAME')}:{os.getenv('MONGO_INITDB_ROOT_PASSWORD')}@localhost:27017/{os.getenv('MONGO_INITDB_DATABASE')}?authSource=admin"
+    )
+    collection = client[os.getenv("MONGO_INITDB_DATABASE")]["Emojis"]
+
+    discord_emoji_data.clear()
+    discord_emoji_desc_embeddings = []
+
+    for doc in collection.find(
+        {
+            "description": {"$exists": True},
+            "link": {"$exists": True},
+            "downloads": {"$exists": True},
+        }
+    ):
+        description = doc["description"]
+        link = doc["link"]
+        emb = get_sentence_embedding(description)
+        discord_emoji_data.append(
+            {"description": description, "link": link, "downloads": doc["downloads"]}
+        )
+        discord_emoji_desc_embeddings.append(emb)
+
+    discord_emb_matrix = np.stack(discord_emoji_desc_embeddings)
+    discord_emb_matrix /= np.linalg.norm(discord_emb_matrix, axis=1, keepdims=True)
+    logger.info("✅ Precomputed and normalized Discord emoji name embeddings matrix")
 
     yield
 
@@ -97,47 +137,52 @@ async def infer_emoji(req: TextRequest):
 
 
 @app.post("/infer/bert_base")
-async def infer_text(req: TextRequest):
+async def infer_text(req: TextRequest, database: str = Query(None)):
     sent_emb = get_sentence_embedding(req.text)
     sent_emb /= np.linalg.norm(sent_emb)
 
-    # compute vectorized cosine similarity (matrix multiplication) between input sentence embedding and all emoji name embeddings
-    similar_names = emb_matrix @ sent_emb
-    best_idx = int(np.argmax(similar_names))  # get index of the most similar emoji name
-    emoji_name = emoji_names[best_idx]
-    emoji_char = next(e["char"] for e in emoji_data if e["name"] == emoji_name)
+    if database == "enabled":
+        # ─── Discord emoji prediction ───
+        similar_names = discord_emb_matrix @ sent_emb
 
-    # split the full emoji name into candidate words (filter out stopwords and punctuation)
-    candidates = [
-        w.strip(" ,-’'\"").lower()
-        for w in emoji_name.split()
-        if w.lower() not in stopwords
-    ]
+        # identify top-10 by raw cosine similarity
+        top10_idxs = np.argsort(similar_names)[::-1][:10]
 
-    # compute cosine similarity between input sentence embedding and all word embeddings in the emoji name to pick 1 word that represents the input sentence the best
-    best_score = -1.0
-    emoji_tag = None
+        print("\nTop 10 candidates (raw):")
+        for idx in top10_idxs:
+            e = discord_emoji_data[idx]
+            print(
+                f"- {e['description']} | downloads: {e.get('downloads', 0)} | sim: {similar_names[idx]:.4f}"
+            )
 
-    for word in candidates:
-        word_emb = get_sentence_embedding(word)
-        word_emb /= np.linalg.norm(word_emb)
+        # build normalized download bias only for those top-10
+        top10_downloads = np.array(
+            [discord_emoji_data[i].get("downloads", 0) for i in top10_idxs]
+        )
+        if top10_downloads.max() > 0:
+            norm_downloads = top10_downloads / top10_downloads.max()
+        else:
+            norm_downloads = np.ones_like(top10_downloads)
 
-        score = float(np.dot(sent_emb, word_emb))
+        # combine raw similar_names + downloads bias (for top-10 only)
+        bias_strength = 0.0
+        top10_similar_names = similar_names[top10_idxs]
+        biased_top10 = (
+            1 - bias_strength
+        ) * top10_similar_names + bias_strength * norm_downloads
 
-        if score > best_score:
-            best_score = score
-            emoji_tag = word
+        # pick the best among those 10
+        best_subidx = int(np.argmax(biased_top10))  # index within 0–9
+        best_idx = top10_idxs[best_subidx]  # global index
+        best_emoji = discord_emoji_data[best_idx]
 
-    print("")
-    print(
-        "Input: "
-        + req.text
-        + " | Output emoji: "
-        + emoji_char
-        + " | full name: "
-        + emoji_name
-        + " | short name: "
-        + emoji_tag
-    )
-
-    return {"emoji": emoji_char, "name": emoji_tag}
+        return {"link": best_emoji["link"]}
+    else:
+        # ─── Unicode emoji prediction ───
+        similar_names = unicode_emb_matrix @ sent_emb
+        best_idx = int(np.argmax(similar_names))
+        emoji_name = unicode_emoji_names[best_idx]
+        emoji_char = next(
+            e["char"] for e in unicode_emoji_data if e["name"] == emoji_name
+        )
+        return {"emoji": emoji_char}

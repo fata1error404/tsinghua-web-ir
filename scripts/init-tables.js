@@ -15,11 +15,17 @@ adminDB.createCollection(emojisColl, {
                 name: {
                     bsonType: "string"
                 },
+                description: {
+                    bsonType: "string"
+                },
                 tags: {
                     bsonType: "array",
                     items: {
                         bsonType: "string"
                     }
+                },
+                downloads: {
+                    bsonType: "int"
                 }
             }
         }

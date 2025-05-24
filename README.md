@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 MD001 MD045 -->
+
 # Text Editor with Emoji Search Engine 🔍
 
 ### Project overview

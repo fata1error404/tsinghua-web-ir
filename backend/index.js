@@ -184,7 +184,7 @@ app.post('/api/emoji-predict', async (req, res) => {
     const useDb = req.query.database === 'enabled';
 
     // send input text to the LLM server for inference (predict the emoji by the last sentence in the text area)
-    const askModel = await fetch(`http://localhost:8000/infer/${req.query.model}`, {
+    const askModel = await fetch(`http://localhost:8000/infer/${req.query.model}?database=${req.query.database}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textInput })
@@ -193,34 +193,12 @@ app.post('/api/emoji-predict', async (req, res) => {
     if (!askModel.ok)
         throw new Error(await askModel.text());
 
-    const { emoji, name } = await askModel.json();
+    const { emoji, link } = await askModel.json();
 
     if (!useDb)
         return res.json({ link: null, name: emoji });
 
-    try {
-        let predictedTag;
-        if (req.query.model === "bert_fine_tuned")
-            predictedTag = emojisTwitter.find(e => e.emoji === emoji)?.tag || null;
-        else
-            predictedTag = name;
-
-        if (!predictedTag)
-            return res.status(500).json({ error: 'Unknown emoji mapping' });
-
-        // search for the first matching emoji by the predicted tag
-        const searchUrl = `/api/emoji-search?q=${encodeURIComponent(predictedTag)}&mode=smart&type=all&database=enabled`;
-        const searchEmoji = await fetch(`http://localhost:3000${searchUrl}`);
-
-        if (!searchEmoji.ok)
-            throw new Error(`Search failed: ${await searchEmoji.text()}`);
-
-        const result = (await searchEmoji.json())[0];
-        return res.json({ link: result.link });
-    } catch (err) {
-        console.error('Error predicting emoji:', err);
-        return res.status(500).json({ error: 'Error predicting emoji' });
-    }
+    return res.json({ link: link });
 });
 
 

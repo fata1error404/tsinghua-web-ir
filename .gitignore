@@ -1,3 +1,4 @@
 .vscode/
+mongodb/
 backend/node_modules/
 backend/glove.6B.50d.word2vec.bin

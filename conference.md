@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD034 -->
+
 # ACM Multimedia 2025
 
 Demo-track page:  
@@ -13,3 +15,14 @@ Demo-paper requirements:
 ## Ideas
 
 1. Generative model to edit emojis
+2. Fine-tuned some model to give emoji descriptions in a way like they are given in Unicode (fine tune vs base model)
+3. Do something with roberta classifier, to make more accurate and to predict Discord emojis
+
+https://huggingface.co/Salesforce/instructblip-flan-t5-xxl
+https://www.analyticsvidhya.com/blog/2024/03/salesforce-blip-revolutionizing-image-captioning/
+
+## Prompt engineering
+
+1. Describe this image like a Unicode emoji caption
+2. Describe this image as a short emoji-style caption.
+3. Generate a concise meme caption in the style of a Unicode emoji description, e.g. ‘grinning face with sweat’.
